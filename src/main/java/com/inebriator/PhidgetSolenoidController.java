@@ -77,9 +77,9 @@ public class PhidgetSolenoidController implements SolenoidController {
 		LOG.debug("Setting state for {} to {}", solenoid, state);
 
 		try {
-			if (phidgets.length >= solenoid.getPhidgetId() + 1) {
+			if (solenoid.getPhidgetId() + 1 > phidgets.length) {
 				throw new RuntimeException("Phidget does not exist for " + solenoid);
-			} else if (phidgets[solenoid.getPhidgetId()].getOutputCount() >= solenoid.getSolenoidId()) {
+			} else if (solenoid.getSolenoidId() + 1 > phidgets[solenoid.getPhidgetId()].getOutputCount() ) {
 				throw new RuntimeException("Output does not exist for " + solenoid);
 			}
 
