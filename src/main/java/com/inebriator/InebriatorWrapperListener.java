@@ -173,7 +173,7 @@ public class InebriatorWrapperListener implements WrapperListener {
 		EnvironmentConfig environmentConfig = new EnvironmentConfig();
 		environmentConfig.setAllowCreate(true);
 		environmentConfig.setReadOnly(false);
-		File file = new File("deploy/drinksdb");
+		File file = new File("../drinksdb");
 		return new Environment(file, environmentConfig);
 	}
 

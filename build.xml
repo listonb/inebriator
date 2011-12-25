@@ -5,20 +5,39 @@
 	</target>
 
 	<target name="init">
-		<mkdir dir="${basedir}/build/classes" />
-		<mkdir dir="${basedir}/build/jars" />
+		<mkdir dir="${basedir}/build/main/classes" />
+		<mkdir dir="${basedir}/build/main/jars" />
 		<mkdir dir="${basedir}/build/dist" />
+		<touch file="${basedir}/build/dist/.keep" />
 	</target>
 
 	<target name="compile" depends="init">
-
-		<javac srcdir="${basedir}/src/main/java"
+		<javac
+				srcdir="${basedir}/src/main/java"
+				destdir="${basedir}/build/main/classes">
+			<classpath>
+				<fileset dir="lib">
+					<include name="*.jar"/>
+				</fileset>
+			</classpath>
+		</javac>
 	</target>
 
 	<target name="jar" depends="compile">
+		<jar
+				destfile="${basedir}/build/dist/lib/inebriator.jar"
+				basedir="${basedir}/build/main/classes" />
 	</target>
 
 	<target name="dist" depends="jar">
+		<zip destfile="${basedir}/build/dist/inebriator.zip">
+			<zipfileset dir="${basedir}/lib" prefix="inebriator/lib" />
+			<zipfileset dir="${basedir}/build/dist/lib/" prefix="inebriator/lib" />
+			<zipfileset dir="${basedir}/src/main/bin" prefix="inebriator/bin" filemode="0755" />
+			<zipfileset dir="${basedir}/src/main/resources" prefix="inebriator/conf" />
+			<zipfileset file="${basedir}/build/dist/.keep" prefix="inebriator/logs" />
+			<zipfileset file="${basedir}/build/dist/.keep" prefix="inebriator/drinksdb" />
+		</zip>
 	</target>
 
 	<target name="clean-and-dist" depends="clean, dist" />
