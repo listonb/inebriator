@@ -150,8 +150,6 @@ public class InebriatorWrapperListener implements WrapperListener {
 	}
 
 	private SolenoidController getSolenoidController(Properties properties) {
-		if (true) return new MockSolenoidController();
-		
 		List<Integer> serialNumbers = new ArrayList<Integer>();
 		int index = 0;
 
