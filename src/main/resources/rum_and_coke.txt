@@ -1,0 +1,7 @@
+{
+  "name": "rum_and_coke",
+  "ingredients": {
+    "rum": 2,
+    "pepsi": 6
+  }
+}

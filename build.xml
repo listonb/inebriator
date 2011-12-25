@@ -1,0 +1,27 @@
+<project name="inebriator" default="clean-and-dist" basedir=".">
+
+	<target name="clean">
+		<delete dir="${basedir}/build" />
+	</target>
+
+	<target name="init">
+		<mkdir dir="${basedir}/build/classes" />
+		<mkdir dir="${basedir}/build/jars" />
+		<mkdir dir="${basedir}/build/dist" />
+	</target>
+
+	<target name="compile" depends="init">
+
+		<javac srcdir="${basedir}/src/main/java"
+	</target>
+
+	<target name="jar" depends="compile">
+	</target>
+
+	<target name="dist" depends="jar">
+	</target>
+
+	<target name="clean-and-dist" depends="clean, dist" />
+
+</project>
+
