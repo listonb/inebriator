@@ -4,7 +4,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.phidgets.InterfaceKitPhidget;
+import com.phidgets.Phidget;
 import com.phidgets.PhidgetException;
+import com.phidgets.event.ErrorEvent;
+import com.phidgets.event.ErrorListener;
 
 public class PhidgetSolenoidController implements SolenoidController {
 
@@ -45,8 +48,17 @@ public class PhidgetSolenoidController implements SolenoidController {
 	private static InterfaceKitPhidget openAndAttachPhidget(int serialNumber) {
 		InterfaceKitPhidget phidget;
 
+		Phidget.enableLogging(Phidget.PHIDGET_LOG_INFO, null);
+
 		try {
 			phidget = new InterfaceKitPhidget();
+			phidget.addErrorListener(new ErrorListener() {
+				@Override
+				public void error(ErrorEvent errorEvent) {
+					LOG.error("Phidget error from {}: {}", errorEvent.getSource(), errorEvent.getException());
+				}
+			});
+
 			LOG.info("Connecting to Phidget with serial number [{}]", serialNumber);
 			phidget.open(serialNumber);
 	

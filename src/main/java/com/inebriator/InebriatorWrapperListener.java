@@ -24,7 +24,6 @@ import com.sleepycat.je.Database;
 import com.sleepycat.je.DatabaseConfig;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.EnvironmentConfig;
-import com.sun.grizzly.http.SelectorThread;
 import com.sun.jersey.api.container.grizzly2.GrizzlyServerFactory;
 import com.sun.jersey.api.core.PackagesResourceConfig;
 import com.sun.jersey.api.core.ResourceConfig;
@@ -53,7 +52,6 @@ public class InebriatorWrapperListener implements WrapperListener {
 	private long pourMillisPerUnit;
 	private long airFlushDurationMillis;
 	private long waterFlushDurationMillis;
-	private SelectorThread threadSelector;
 
 	public static void main(String[] args) throws Exception {
 		WrapperManager.start(new InebriatorWrapperListener(), args);
@@ -117,13 +115,6 @@ public class InebriatorWrapperListener implements WrapperListener {
 
 	@Override
 	public int stop(int exitCode) {
-		
-		try {
-			threadSelector.stopEndpoint();
-		} catch (Exception e) {
-			LOG.error("Error stopping Grizzly endpoint", e);
-			exitCode = exitCode == 0 ? 1 : exitCode;
-		}
 
 		try {
 			solenoidController.disconnect();
