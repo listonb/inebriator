@@ -94,25 +94,6 @@ public class InebriatorWrapperListener implements WrapperListener {
 		return null;
 	}
 
-	private void tmpIntTest() {
-		Map<String, Integer> ingredients = new HashMap<String, Integer>();
-		ingredients.put("vodka", 1);
-		ingredients.put("rum", 1);
-		ingredients.put("tequila", 1);
-		ingredients.put("gin", 1);
-		ingredients.put("blue_curacao", 1);
-		ingredients.put("sweet_and_sour_mix", 4);
-		ingredients.put("7_up", 4);
-		Cocktail cocktail = new Cocktail("adios_motherfucker", ingredients);
-		inebriator.addCocktailDefinition("adios_motherfucker", cocktail);
-		
-		ingredients = new HashMap<String, Integer>();
-		ingredients.put("gin", 4);
-		ingredients.put("sweet_vermouth", 4);
-		ingredients.put("campari", 4);
-		inebriator.addCocktailDefinition("negroni", new Cocktail("negroni", ingredients));
-	}
-
 	@Override
 	public int stop(int exitCode) {
 
