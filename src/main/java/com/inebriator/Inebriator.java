@@ -35,17 +35,23 @@ public class Inebriator {
 	private static final String WATER_SOLENOID_NAME = "water";
 	private static final String SPOUT_SOLENOID_NAME = "spout";
 	private static final String DRAIN_SOLENOID_NAME = "drain";
+	private static final String READY_LIGHT_SOLENOID_NAME = "ready_light";
+	private static final String POURING_LIGHT_SOLENOID_NAME = "pouring_light";
+	private static final String ERROR_LIGHT_SOLENOID_NAME = "error_light";
 
 	private final SolenoidController solenoidController;
 	private final Database drinksDb;
-	private final Solenoid airSolenoid;
-	private final Solenoid waterSolenoid;
-	private final Solenoid spoutSolenoid;
-	private final Solenoid drainSolenoid;
 	private final Map<String, Solenoid> solenoidsByName;
 	private final long pourMillisPerUnit;
 	private final long airFlushDurationMillis;
 	private final long waterFlushDurationMillis;
+	private final Solenoid airSolenoid;
+	private final Solenoid waterSolenoid;
+	private final Solenoid spoutSolenoid;
+	private final Solenoid drainSolenoid;
+	private final Solenoid readyLightSolenoid;
+	private final Solenoid pouringLightSolenoid;
+	private final Solenoid errorLightSolenoid;
 	
 	private final AtomicLong drinkCount = new AtomicLong(0);
 	private final Lock pourLock = new ReentrantLock();
@@ -63,18 +69,15 @@ public class Inebriator {
 		this.waterSolenoid = getRequiredSolenoid(solenoidsByName, WATER_SOLENOID_NAME);
 		this.spoutSolenoid = getRequiredSolenoid(solenoidsByName, SPOUT_SOLENOID_NAME);
 		this.drainSolenoid = getRequiredSolenoid(solenoidsByName, DRAIN_SOLENOID_NAME);
+		this.readyLightSolenoid = getRequiredSolenoid(solenoidsByName, READY_LIGHT_SOLENOID_NAME);
+		this.pouringLightSolenoid = getRequiredSolenoid(solenoidsByName, POURING_LIGHT_SOLENOID_NAME);
+		this.errorLightSolenoid = getRequiredSolenoid(solenoidsByName, ERROR_LIGHT_SOLENOID_NAME);
+		
+		reset();
 	}
 
 	public Map<String, Solenoid> getSolenoidsByName() {
 		return solenoidsByName;
-	}
-
-	private static Solenoid getRequiredSolenoid(Map<String, Solenoid> solenoidsByName, String name) {
-		Solenoid solenoid = solenoidsByName.get(name);
-		if (solenoid == null) {
-			throw new RuntimeException("Missing required solenoid [" + name + "]");
-		}
-		return solenoid;
 	}
 
 	public Set<String> getAvailableCocktailNames() {
@@ -134,31 +137,42 @@ public class Inebriator {
 	}
 
 	public void pourCocktail(String name) {
+		Cocktail cocktail = getCocktailDefinition(name);
+
 		try {
 			pourLock.lock();
-			Cocktail cocktail = getCocktailDefinition(name);
+			solenoidController.closeSolenoid(readyLightSolenoid);
+			solenoidController.openSolenoid(pouringLightSolenoid);
+
 			long drinkNumber = drinkCount.incrementAndGet();
-		
+
 			StopWatch stopWatch = new StopWatch();
 			LOG.info("Pouring drink #{}: {}", drinkNumber, name);
-			
+
 			stopWatch.start();
 			pourCocktail(cocktail);
 			stopWatch.stop();
-		
+
 			LOG.info("Finished pouring drink #{} ({}) in {} ms", new Object[] { drinkNumber, name, stopWatch.getTime() });
 		} finally {
+			solenoidController.closeSolenoid(pouringLightSolenoid);
+			solenoidController.openSolenoid(readyLightSolenoid);
 			pourLock.unlock();
 		}
 	}
 	
 	public void pourStraight(String solenoidName, int units) {
+		Solenoid solenoid = solenoidsByName.get(solenoidName);
+		if (solenoid == null) {
+			throw new RuntimeException("Beverage [" + solenoidName + "] is not defined");
+		}
+
 		try {
+
 			pourLock.unlock();
-			Solenoid solenoid = solenoidsByName.get(solenoidName);
-			if (solenoid == null) {
-				throw new RuntimeException("Beverage [" + solenoidName + "] is not defined");
-			}
+			solenoidController.closeSolenoid(readyLightSolenoid);
+			solenoidController.openSolenoid(pouringLightSolenoid);
+
 			// TODO sanity check that it's a beverage
 			
 			long drinkNumber = drinkCount.incrementAndGet();
@@ -172,22 +186,27 @@ public class Inebriator {
 	
 			LOG.info("Finished pouring drink #{} ({}) in {} ms", new Object[] { drinkNumber, solenoidName, stopWatch.getTime() });
 		} finally {
+			solenoidController.closeSolenoid(pouringLightSolenoid);
+			solenoidController.openSolenoid(readyLightSolenoid);
 			pourLock.unlock();
 		}
 	}
 	
 	public void reset() {
 		LOG.info("Resetting all solenoids to closed state");
+
 		for (Solenoid solenoid : solenoidsByName.values()) {
 			solenoidController.closeSolenoid(solenoid);
 		}
+		solenoidController.openSolenoid(readyLightSolenoid);
+
 		LOG.info("All solenoids have been reset to closed state");
 	}
 
 	private void pourStraight(Solenoid solenoid, long durationMillis) {
 		LOG.debug("Pouring {} for {} ms", solenoid, durationMillis);
 		solenoidController.openSolenoid(spoutSolenoid);
-		pour(solenoid, durationMillis);
+		pourSingleBeverage(solenoid, durationMillis);
 		flush();
 		LOG.debug("Pour {} for {} ms complete", solenoid, durationMillis);
 	}
@@ -195,7 +214,6 @@ public class Inebriator {
 	private void pourCocktail(Cocktail cocktail) {
 		int numTasks = cocktail.getIngredients().size();
 		Set<PourTask> tasks = new HashSet<PourTask>(numTasks);
-		Set<Solenoid> solenoids = new HashSet<Solenoid>(numTasks);
 		
 		for (Map.Entry<String, Integer> entry : cocktail.getIngredients().entrySet()) {
 			String solenoidName = entry.getKey();
@@ -248,21 +266,14 @@ public class Inebriator {
 		}
 
 		if (abortMission) {
-			for (Solenoid solenoid : solenoids) {
-				try {
-					solenoidController.closeSolenoid(solenoid);
-				} catch (Exception e) {
-					LOG.warn("Unable to close {}", solenoid, e);
-					// Keep going, try to shut them all off
-				}
-			}
-			solenoidController.closeSolenoid(spoutSolenoid);
+			LOG.warn("Pour failed -- resetting all solenoids");
+			reset();
 		} else {
 			flush();
 		}
 	}
 
-	private void pour(Solenoid solenoid, long durationMillis) {
+	private void pourSingleBeverage(Solenoid solenoid, long durationMillis) {
 		LOG.debug("Pouring {} for [{}] ms", solenoid, durationMillis);
 
 		try {
@@ -290,16 +301,30 @@ public class Inebriator {
 	}
 
 	private void flush() {
-		pour(airSolenoid, airFlushDurationMillis);
+		LOG.debug("Flushing");
+
+		pourSingleBeverage(airSolenoid, airFlushDurationMillis);
 		snooze(500);
 		solenoidController.closeSolenoid(spoutSolenoid);
 		solenoidController.openSolenoid(drainSolenoid);
 		snooze(500);
-		pour(waterSolenoid, waterFlushDurationMillis);
+		pourSingleBeverage(waterSolenoid, waterFlushDurationMillis);
 		snooze(500);
-		pour(airSolenoid, airFlushDurationMillis);
+		pourSingleBeverage(airSolenoid, airFlushDurationMillis);
 		snooze(500);
 		solenoidController.closeSolenoid(drainSolenoid);
+		
+		LOG.debug("Flush complete");
+	}
+
+	private static Solenoid getRequiredSolenoid(Map<String, Solenoid> solenoidsByName, String name) {
+		Solenoid solenoid = solenoidsByName.get(name);
+
+		if (solenoid == null) {
+			throw new RuntimeException("Missing required solenoid [" + name + "]");
+		}
+
+		return solenoid;
 	}
 
 	private static void snooze(long millis) {
@@ -323,7 +348,7 @@ public class Inebriator {
 
 		@Override
 		public Object call() throws Exception {
-			pour(solenoid, durationMillis);
+			pourSingleBeverage(solenoid, durationMillis);
 			return null;
 		}
 	}
