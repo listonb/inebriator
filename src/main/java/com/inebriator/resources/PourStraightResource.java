@@ -9,11 +9,16 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.inebriator.InebriatorWrapperListener;
 
 @Path("/inebriator/pour/straight/{name}")
 public class PourStraightResource {
 
+	private static final Logger LOG = LoggerFactory.getLogger(PourStraightResource.class);
+	
 	@GET
 	@Produces(MediaType.TEXT_HTML)
 	public Response pour(@PathParam("name") String name, @QueryParam("units") int units) {
@@ -23,6 +28,7 @@ public class PourStraightResource {
 		try {
 			InebriatorWrapperListener.inebriator.pourStraight(name, units);
 		} catch (Exception e) {
+			LOG.warn("PourStraight failed", e);
 			return Response.serverError().entity(e.getMessage()).type(MediaType.TEXT_PLAIN).build();
 		}
 
