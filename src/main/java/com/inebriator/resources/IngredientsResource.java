@@ -12,7 +12,7 @@ import com.inebriator.InebriatorWrapperListener;
 public class IngredientsResource {
 
 	@GET
-	@Produces(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
 	public String getIngredients() {
 		return new GsonBuilder().setPrettyPrinting().create().toJson(InebriatorWrapperListener.inebriator.getSolenoidsByName()) + "\n";
 	}

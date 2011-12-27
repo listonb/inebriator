@@ -27,11 +27,11 @@ public class CocktailResource {
 
 	private static final Logger LOG = LoggerFactory.getLogger(CocktailResource.class);
 
-    @Context
-    UriInfo uriInfo;
+  @Context
+  UriInfo uriInfo;
 
 	@PUT
-	@Consumes(MediaType.TEXT_PLAIN)
+	@Consumes(MediaType.APPLICATION_JSON)
 	public Response addCocktail(@PathParam("name") String name, byte[] data) throws URISyntaxException {
 		String cocktailJson = new String(data);
 		LOG.info("Received definition for cocktail {}: {}", name, cocktailJson);
@@ -42,7 +42,7 @@ public class CocktailResource {
 	}
 
 	@GET
-	@Produces(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
 	public String getCocktail(@PathParam("name") String name) {
 		Cocktail cocktail = InebriatorWrapperListener.inebriator.getCocktailDefinition(name);
 		return new GsonBuilder().setPrettyPrinting().create().toJson(cocktail) + "\n";
