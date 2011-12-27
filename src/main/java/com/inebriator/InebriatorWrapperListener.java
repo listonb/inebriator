@@ -34,6 +34,7 @@ public class InebriatorWrapperListener implements WrapperListener {
 
 	private static final String CONFIG_PATH = "inebriator.properties";
 	private static final String HTTP_LISTEN_PORT_PROP_NAME = "inebriator.http.listen.port";
+	private static final String SOLENOID_CONTROLLER_IMPL_PROP_NAME = "inebriator.solenoid.controller.impl";
 	private static final String POUR_MILLIS_PER_UNIT_PROP_NAME = "inebriator.pour.millis.per.unit";
 	private static final String AIR_FLUSH_DURATION_MILLIS_PROP_NAME = "inebriator.flush.air.duration";
 	private static final String WATER_FLUSH_DURATION_MILLIS_PROP_NAME = "inebriator.flush.water.duration";
@@ -136,7 +137,19 @@ public class InebriatorWrapperListener implements WrapperListener {
 			index++;
 		}
 
-		return new PhidgetSolenoidController(serialNumbers.toArray(new Integer[0]));
+		String solenoidControllerImplType = getRequiredStringValue(properties, SOLENOID_CONTROLLER_IMPL_PROP_NAME);
+		SolenoidController controller;
+
+		if (solenoidControllerImplType.equals("mock")) {
+			LOG.warn("Using the mock solenoid controller -- no phidget commands will be sent");
+			controller = new MockSolenoidController();
+		} else if (solenoidControllerImplType.equals("phidget")) {
+			controller = new PhidgetSolenoidController(serialNumbers.toArray(new Integer[0]));
+		} else {
+			throw new RuntimeException("Unsupported " + SOLENOID_CONTROLLER_IMPL_PROP_NAME + " " + solenoidControllerImplType);
+		}
+
+		return controller;
 	}
 
 	private Environment openEnvironment() {

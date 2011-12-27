@@ -51,8 +51,10 @@ public class Inebriator {
 	private final Solenoid drainSolenoid;
 	private final Solenoid readyLightSolenoid;
 	private final Solenoid pouringLightSolenoid;
+	// TODO write logic to use the error light
+	@SuppressWarnings("unused")
 	private final Solenoid errorLightSolenoid;
-	
+
 	private final AtomicLong drinkCount = new AtomicLong(0);
 	private final Lock pourLock = new ReentrantLock();
 
