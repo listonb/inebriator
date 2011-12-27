@@ -34,7 +34,7 @@ public class InebriatorWrapperListener implements WrapperListener {
 
 	private static final String CONFIG_PATH = "inebriator.properties";
 	private static final String HTTP_LISTEN_PORT_PROP_NAME = "inebriator.http.listen.port";
-	private static final String SOLENOID_CONTROLLER_IMPL_PROP_NAME = "inebriator.solenoid.controller.impl";
+	private static final String SOLENOID_CONTROLLER_IMPL_PROP_NAME = "inebriator.solenoidcontroller.impl";
 	private static final String POUR_MILLIS_PER_UNIT_PROP_NAME = "inebriator.pour.millis.per.unit";
 	private static final String AIR_FLUSH_DURATION_MILLIS_PROP_NAME = "inebriator.flush.air.duration";
 	private static final String WATER_FLUSH_DURATION_MILLIS_PROP_NAME = "inebriator.flush.water.duration";
