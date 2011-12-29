@@ -22,7 +22,7 @@ import com.google.gson.GsonBuilder;
 import com.inebriator.Cocktail;
 import com.inebriator.InebriatorWrapperListener;
 
-@Path("/inebriator/cocktail/{name}")
+@Path("/inebriator/cocktails/{name}")
 public class CocktailResource {
 
 	private static final Logger LOG = LoggerFactory.getLogger(CocktailResource.class);
