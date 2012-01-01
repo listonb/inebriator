@@ -34,7 +34,7 @@ public class Solenoid {
 		return solenoidId;
 	}
 	
-	private static int parseInteger(String s) {
+	public static int parseInteger(String s) {
 		int value;
 
 		try {

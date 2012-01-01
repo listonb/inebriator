@@ -1,19 +1,19 @@
 GET /inebriator/reset
     Resets all the solenoids to the closed state.
     
-GET /inebriator/pour/cocktail/{cocktail}
+GET /inebriator/pour/cocktails/{cocktail}
     Pours {cocktail}.
     
 GET /inebriator/pour/straight/{ingredient}?count={count}
     Pours {count} units of {ingredient}.
 
-POST /inebriator/cocktail/rum_and_coke
+POST /inebriator/cocktails/rum_and_coke
     Adds {cocktail} to the DB. The definition must be specified in the HTTP request, in JSON format.
 
-GET /inebriator/cocktail/rum_and_coke
+GET /inebriator/cocktails/rum_and_coke
     Returns the definition of {cocktail} in the HTTP response, in JSON format.
 
-DELETE /inebriator/cocktail/{cocktail}
+DELETE /inebriator/cocktails/{cocktail}
     Deletes the cocktail named {cocktail} from the DB.
 
 GET /inebriator/cocktails

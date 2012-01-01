@@ -27,8 +27,8 @@ public class CocktailResource {
 
 	private static final Logger LOG = LoggerFactory.getLogger(CocktailResource.class);
 
-  @Context
-  UriInfo uriInfo;
+	@Context
+	UriInfo uriInfo;
 
 	@PUT
 	@Consumes(MediaType.APPLICATION_JSON)

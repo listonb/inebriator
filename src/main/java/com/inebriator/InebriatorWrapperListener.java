@@ -7,9 +7,11 @@ import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import javax.ws.rs.core.UriBuilder;
 
@@ -20,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.tanukisoftware.wrapper.WrapperListener;
 import org.tanukisoftware.wrapper.WrapperManager;
 
+import com.inebriator.listener.BaseSensorChangeListener;
 import com.sleepycat.je.Database;
 import com.sleepycat.je.DatabaseConfig;
 import com.sleepycat.je.Environment;
@@ -32,12 +35,14 @@ public class InebriatorWrapperListener implements WrapperListener {
 
 	private static final Logger LOG = LoggerFactory.getLogger(InebriatorWrapperListener.class);
 
+	private static final String DRINKS_DB_ENVIRONMENT_PATH = "../drinksdb";
 	private static final String CONFIG_PATH = "inebriator.properties";
 	private static final String HTTP_LISTEN_PORT_PROP_NAME = "inebriator.http.listen.port";
 	private static final String SOLENOID_CONTROLLER_IMPL_PROP_NAME = "inebriator.solenoidcontroller.impl";
 	private static final String POUR_MILLIS_PER_UNIT_PROP_NAME = "inebriator.pour.millis.per.unit";
 	private static final String AIR_FLUSH_DURATION_MILLIS_PROP_NAME = "inebriator.flush.air.duration";
 	private static final String WATER_FLUSH_DURATION_MILLIS_PROP_NAME = "inebriator.flush.water.duration";
+	private static final String MAX_POUR_UNITS_PROP_NAME = "inebriator.max.pour.units";
 	private static final String SOLENOID_DEF_PREFIX = "inebriator.solenoid.";
 	private static final String PHIDGET_SERIAL_NUM_PREFIX = "inebriator.phidget.serial.";
 
@@ -48,11 +53,14 @@ public class InebriatorWrapperListener implements WrapperListener {
 	private SolenoidController solenoidController;
 	private Environment environment;
 	private Database drinksDb;
+	private HttpServer httpServer;
+
 	private int httpListenPort;
 	private Map<String, Solenoid> solenoidsByName;
 	private long pourMillisPerUnit;
 	private long airFlushDurationMillis;
 	private long waterFlushDurationMillis;
+	private long maxPourUnits;
 
 	public static void main(String[] args) throws Exception {
 		WrapperManager.start(new InebriatorWrapperListener(), args);
@@ -78,20 +86,26 @@ public class InebriatorWrapperListener implements WrapperListener {
 			this.pourMillisPerUnit = getRequiredLongValue(inebriatorProperties, POUR_MILLIS_PER_UNIT_PROP_NAME);
 			this.airFlushDurationMillis = getRequiredLongValue(inebriatorProperties, AIR_FLUSH_DURATION_MILLIS_PROP_NAME);
 			this.waterFlushDurationMillis = getRequiredLongValue(inebriatorProperties, WATER_FLUSH_DURATION_MILLIS_PROP_NAME);
-			inebriator = new Inebriator(solenoidController, drinksDb, solenoidsByName, pourMillisPerUnit, airFlushDurationMillis, waterFlushDurationMillis);
+			this.maxPourUnits = getRequiredLongValue(inebriatorProperties, MAX_POUR_UNITS_PROP_NAME);
+
+			inebriator = new Inebriator(solenoidController, drinksDb, solenoidsByName, pourMillisPerUnit, airFlushDurationMillis, waterFlushDurationMillis, maxPourUnits);
+
+			if (solenoidController instanceof PhidgetSolenoidController) {
+				PhidgetSolenoidController psc = (PhidgetSolenoidController) solenoidController;
+				for (BaseSensorChangeListener listener : psc.getSensorChangeListeners()) {
+					listener.setInebriator(inebriator);
+				}
+			}
+
 			URI baseUri = UriBuilder.fromUri("http://localhost/").port(httpListenPort).build();
-			Map<String, String> opts = new HashMap<String, String>();
-			opts.put("com.sun.jersey.config.property.packages", "com.inebriator.resources");
 			ResourceConfig resourceConfig = new PackagesResourceConfig("com.inebriator.resources");
-			HttpServer httpServer = GrizzlyServerFactory.createHttpServer(baseUri, resourceConfig);
-			httpServer.start();
+			this.httpServer = GrizzlyServerFactory.createHttpServer(baseUri, resourceConfig);
+			this.httpServer.start();
 		} catch (Exception e) {
 			LOG.error("Startup failed", e);
 			return 1;
 		}
 
-//		tmpIntTest();
-		
 		return null;
 	}
 
@@ -118,8 +132,54 @@ public class InebriatorWrapperListener implements WrapperListener {
 			LOG.error("Error closing BDB environment", e);
 			exitCode = exitCode == 0 ? 1 : exitCode;
 		}
+		
+		try {
+			httpServer.stop();
+		} catch (Exception e) {
+			LOG.error("Error stopping http server", e);
+			exitCode = exitCode == 0 ? 1 : exitCode;
+		}
 
 		return exitCode;
+	}
+
+	@SuppressWarnings("unchecked")
+	private Set<BaseSensorChangeListener> getSensorChangeListeners(Properties properties) {
+		Set<BaseSensorChangeListener> result = new HashSet<BaseSensorChangeListener>();
+
+		for (String key : (Set<String>) properties.keys()) {
+			if (key.startsWith("inebriator.sensorchangelistener.")) {
+				String ids = key.replace(SOLENOID_DEF_PREFIX, "");
+				String[] parts = ids.split(",");
+				if (parts.length != 2) {
+					throw new RuntimeException("Invalid sensor config: [" + ids + "]");
+				}
+
+				int phidgetId = Solenoid.parseInteger(parts[0]);
+				int solenoidId = Solenoid.parseInteger(parts[1]);
+				String implementingClassName = properties.getProperty(key);
+				result.add(instantiateSensorChangeListener(implementingClassName, phidgetId, solenoidId));
+			}
+		}
+
+		return result;
+	}
+
+	private BaseSensorChangeListener instantiateSensorChangeListener(String implementingClassName, int phidgetId, int solenoidId) {
+		BaseSensorChangeListener listener;
+		
+		try {
+			@SuppressWarnings("unchecked")
+			Class<? extends BaseSensorChangeListener> clazz = (Class<? extends BaseSensorChangeListener>) Class.forName(implementingClassName);
+			listener = clazz.newInstance();
+		} catch (Exception e) {
+			throw new RuntimeException("Unable to instantiate class " + implementingClassName, e);
+		}
+
+		listener.setPhidgetSerialNumber(phidgetId);
+		listener.setIndexNumber(solenoidId);
+
+		return listener;
 	}
 
 	private SolenoidController getSolenoidController(Properties properties) {
@@ -137,6 +197,8 @@ public class InebriatorWrapperListener implements WrapperListener {
 			index++;
 		}
 
+		Set<BaseSensorChangeListener> sensorChangeListeners = getSensorChangeListeners(properties);
+
 		String solenoidControllerImplType = getRequiredStringValue(properties, SOLENOID_CONTROLLER_IMPL_PROP_NAME);
 		SolenoidController controller;
 
@@ -144,7 +206,7 @@ public class InebriatorWrapperListener implements WrapperListener {
 			LOG.warn("Using the mock solenoid controller -- no phidget commands will be sent");
 			controller = new MockSolenoidController();
 		} else if (solenoidControllerImplType.equals("phidget")) {
-			controller = new PhidgetSolenoidController(serialNumbers.toArray(new Integer[0]));
+			controller = new PhidgetSolenoidController(serialNumbers.toArray(new Integer[0]), sensorChangeListeners);
 		} else {
 			throw new RuntimeException("Unsupported " + SOLENOID_CONTROLLER_IMPL_PROP_NAME + " " + solenoidControllerImplType);
 		}
@@ -156,7 +218,7 @@ public class InebriatorWrapperListener implements WrapperListener {
 		EnvironmentConfig environmentConfig = new EnvironmentConfig();
 		environmentConfig.setAllowCreate(true);
 		environmentConfig.setReadOnly(false);
-		File file = new File("../drinksdb");
+		File file = new File(DRINKS_DB_ENVIRONMENT_PATH);
 		return new Environment(file, environmentConfig);
 	}
 

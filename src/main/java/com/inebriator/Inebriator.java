@@ -45,6 +45,7 @@ public class Inebriator {
 	private final long pourMillisPerUnit;
 	private final long airFlushDurationMillis;
 	private final long waterFlushDurationMillis;
+	private final long maxPourUnits;
 	private final Solenoid airSolenoid;
 	private final Solenoid waterSolenoid;
 	private final Solenoid spoutSolenoid;
@@ -55,18 +56,23 @@ public class Inebriator {
 	@SuppressWarnings("unused")
 	private final Solenoid errorLightSolenoid;
 
+	public SolenoidController getSolenoidController() {
+		return solenoidController;
+	}
+
 	private final AtomicLong drinkCount = new AtomicLong(0);
 	private final Lock pourLock = new ReentrantLock();
 
 	public Inebriator(SolenoidController solenoidController, Database drinksDb,
-			Map<String, Solenoid> solenoidsByName, long pourMillisPerUnit, long airFlushDurationMillis, long waterFlushDurationMillis) {
+			Map<String, Solenoid> solenoidsByName, long pourMillisPerUnit, long airFlushDurationMillis, long waterFlushDurationMillis, long maxPourUnits) {
 		this.solenoidController = solenoidController;
 		this.drinksDb = drinksDb;
 		this.solenoidsByName = solenoidsByName;
 		this.pourMillisPerUnit = pourMillisPerUnit;
 		this.airFlushDurationMillis = airFlushDurationMillis;
 		this.waterFlushDurationMillis = waterFlushDurationMillis;
-		
+		this.maxPourUnits = maxPourUnits;
+
 		this.airSolenoid = getRequiredSolenoid(solenoidsByName, AIR_SOLENOID_NAME);
 		this.waterSolenoid = getRequiredSolenoid(solenoidsByName, WATER_SOLENOID_NAME);
 		this.spoutSolenoid = getRequiredSolenoid(solenoidsByName, SPOUT_SOLENOID_NAME);
@@ -74,7 +80,7 @@ public class Inebriator {
 		this.readyLightSolenoid = getRequiredSolenoid(solenoidsByName, READY_LIGHT_SOLENOID_NAME);
 		this.pouringLightSolenoid = getRequiredSolenoid(solenoidsByName, POURING_LIGHT_SOLENOID_NAME);
 		this.errorLightSolenoid = getRequiredSolenoid(solenoidsByName, ERROR_LIGHT_SOLENOID_NAME);
-		
+
 		reset();
 	}
 
@@ -140,6 +146,7 @@ public class Inebriator {
 
 	public void pourCocktail(String name) {
 		Cocktail cocktail = getCocktailDefinition(name);
+		validateCocktail(cocktail);
 
 		try {
 			pourLock.lock();
@@ -162,30 +169,34 @@ public class Inebriator {
 			pourLock.unlock();
 		}
 	}
-	
+
 	public void pourStraight(String solenoidName, int units) {
 		Solenoid solenoid = solenoidsByName.get(solenoidName);
 		if (solenoid == null) {
 			throw new RuntimeException("Beverage [" + solenoidName + "] is not defined");
 		}
 
-		try {
+		if (units > maxPourUnits) {
+			throw new RuntimeException("Pour request exceeds the maximum of [" + units + "]");
+		}
 
+		try {
 			pourLock.unlock();
 			solenoidController.closeSolenoid(readyLightSolenoid);
 			solenoidController.openSolenoid(pouringLightSolenoid);
 
-			// TODO sanity check that it's a beverage
-			
+			// TODO sanity check that it's a beverage (i.e. don't let them pour
+			// air or spout)
+
 			long drinkNumber = drinkCount.incrementAndGet();
-	
+
 			StopWatch stopWatch = new StopWatch();
 			LOG.info("Pouring drink #{}: {} ({} units)", new Object[] { drinkNumber, solenoidName, units });
-			
+
 			stopWatch.start();
 			pourStraight(solenoid, units * pourMillisPerUnit);
 			stopWatch.stop();
-	
+
 			LOG.info("Finished pouring drink #{} ({}) in {} ms", new Object[] { drinkNumber, solenoidName, stopWatch.getTime() });
 		} finally {
 			solenoidController.closeSolenoid(pouringLightSolenoid);
@@ -193,7 +204,7 @@ public class Inebriator {
 			pourLock.unlock();
 		}
 	}
-	
+
 	public void reset() {
 		LOG.info("Resetting all solenoids to closed state");
 
@@ -216,7 +227,7 @@ public class Inebriator {
 	private void pourCocktail(Cocktail cocktail) {
 		int numTasks = cocktail.getIngredients().size();
 		Set<PourTask> tasks = new HashSet<PourTask>(numTasks);
-		
+
 		for (Map.Entry<String, Integer> entry : cocktail.getIngredients().entrySet()) {
 			String solenoidName = entry.getKey();
 			Solenoid solenoid = solenoidsByName.get(solenoidName);
@@ -229,11 +240,11 @@ public class Inebriator {
 			
 			tasks.add(new PourTask(solenoid, durationMillis));
 		}
-		
+
 		ExecutorService threadPool = Executors.newFixedThreadPool(numTasks);
 		List<Future<Object>> results = null;
 		boolean abortMission = false;
-		
+
 		solenoidController.openSolenoid(spoutSolenoid);
 
 		try {
@@ -272,6 +283,18 @@ public class Inebriator {
 			reset();
 		} else {
 			flush();
+		}
+	}
+
+	private void validateCocktail(Cocktail cocktail) {
+		int sum = 0;
+
+		for (Integer unitCount : cocktail.getIngredients().values()) {
+			sum += unitCount;
+		}
+
+		if (sum > maxPourUnits) {
+			throw new RuntimeException("Pour request exceeds the maximum of [" + maxPourUnits + "]");
 		}
 	}
 
@@ -315,7 +338,7 @@ public class Inebriator {
 		pourSingleBeverage(airSolenoid, airFlushDurationMillis);
 		snooze(500);
 		solenoidController.closeSolenoid(drainSolenoid);
-		
+
 		LOG.debug("Flush complete");
 	}
 
@@ -329,7 +352,7 @@ public class Inebriator {
 		return solenoid;
 	}
 
-	private static void snooze(long millis) {
+	public static void snooze(long millis) {
 		LOG.debug("Snoozing for [{}] ms", millis);
 
 		try {
